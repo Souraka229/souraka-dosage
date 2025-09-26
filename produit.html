@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Produit - AfroMarket</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        /* Styles de base identiques */
+        :root {
+            --primary: #2E8B57;
+            --primary-dark: #1e6b46;
+            --secondary: #FF6B35;
+            --dark: #2C3E50;
+            --light: #F8F9FA;
+            --gray: #6C757D;
+            --light-gray: #E9ECEF;
+            --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --radius: 8px;
+            --transition: all 0.3s ease;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* Styles spécifiques à la page produit */
+        .product-detail {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            margin: 40px 0;
+        }
+
+        .product-gallery {
+            background-color: var(--light-gray);
+            border-radius: var(--radius);
+            height: 400px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .product-gallery img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .product-info-detail {
+            padding: 20px 0;
+        }
+
+        .product-category {
+            color: var(--gray);
+            text-transform: uppercase;
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+        }
+
+        .product-title-detail {
+            font-size: 2rem;
+            margin-bottom: 20px;
+            color: var(--dark);
+        }
+
+        .product-price-detail {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin: 20px 0;
+        }
+
+        .product-seller-detail {
+            display: flex;
+            align-items: center;
+            margin: 30px 0;
+            padding: 20px;
+            background: var(--light);
+            border-radius: var(--radius);
+        }
+
+        .seller-avatar-large {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background-color: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            color: white;
+            font-weight: bold;
+            margin-right: 15px;
+        }
+
+        .seller-info h3 {
+            margin-bottom: 5px;
+        }
+
+        .seller-rating {
+            color: var(--warning);
+        }
+
+        .product-actions {
+            display: flex;
+            gap: 15px;
+            margin: 30px 0;
+        }
+
+        .btn-large {
+            padding: 15px 30px;
+            font-size: 1.1rem;
+        }
+
+        .product-description {
+            margin-top: 40px;
+        }
+
+        .product-description h3 {
+            margin-bottom: 15px;
+            color: var(--dark);
+        }
+
+        .commission-breakdown {
+            background-color: var(--light-gray);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin: 30px 0;
+        }
+
+        .commission-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+        }
+
+        .commission-item:last-child {
+            border-bottom: none;
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+
+        .related-products {
+            margin: 60px 0;
+        }
+
+        .related-title {
+            margin-bottom: 30px;
+            font-size: 1.5rem;
+            color: var(--dark);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <!-- Header identique aux autres pages -->
+    </header>
+
+    <div class="container">
+        <div class="product-detail" id="productDetail">
+            <!-- Contenu chargé dynamiquement -->
+        </div>
+
+        <div class="related-products">
+            <h3 class="related-title">Produits similaires</h3>
+            <div class="products-grid" id="relatedProducts">
+                <!-- Produits similaires chargés dynamiquement -->
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <!-- Footer identique -->
+    </footer>
+
+    <script>
+        const SUPABASE_URL = 'https://ziarglfpffidjxzkakqu.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InppYXJnbGZwZmZpZGp4emtha3F1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg1MzY4OTAsImV4cCI6MjA3NDExMjg5MH0.oZJs-zIxIm2mqv7RFr1K7XcvJBSwQpxFytXZ1PQCOeQ';
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let currentProduct = null;
+        let currentUser = null;
+
+        async function initProductPage() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const productId = urlParams.get('id');
+            
+            if (!productId) {
+                window.location.href = 'catalogue.html';
+                return;
+            }
+
+            await checkAuthState();
+            await loadProduct(productId);
+            await loadRelatedProducts();
+        }
+
+        async function loadProduct(productId) {
+            const { data, error } = await supabase
+                .from('products')
+                .select(`
+                    *,
+                    profiles:seller_id (
+                        username,
+                        full_name,
+                        created_at
+                    )
+                `)
+                .eq('id', productId)
+                .eq('is_active', true)
+                .single();
+
+            if (error || !data) {
+                document.getElementById('productDetail').innerHTML = `
+                    <div style="grid-column: 1/-1; text-align: center; padding: 60px;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 4rem; color: var(--danger);"></i>
+                        <h3>Produit non trouvé</h3>
+                        <p>Ce produit n'existe pas ou a été supprimé.</p>
+                        <a href="catalogue.html" class="btn-primary">Retour au catalogue</a>
+                    </div>
+                `;
+                return;
+            }
+
+            currentProduct = data;
+            displayProduct();
+        }
+
+        function displayProduct() {
+            const seller = currentProduct.profiles;
+            const sellerInitials = seller?.full_name ? 
+                seller.full_name.split(' ').map(n => n[0]).join('').toUpperCase() : 'V';
+
+            const platformFee = currentProduct.price * 0.10;
+            const sellerEarnings = currentProduct.price * 0.90;
+
+            document.getElementById('productDetail').innerHTML = `
+                <div class="product-gallery">
+                    <img src="${currentProduct.image_url}" alt="${currentProduct.title}">
+                </div>
+                <div class="product-info-detail">
+                    <div class="product-category">${currentProduct.category}</div>
+                    <h1 class="product-title-detail">${currentProduct.title}</h1>
+                    <div class="product-price-detail">${currentProduct.price.toLocaleString()} FCFA</div>
+                    
+                    <div class="product-seller-detail">
+                        <div class="seller-avatar-large">${sellerInitials}</div>
+                        <div class="seller-info">
+                            <h3>${seller?.username || 'Vendeur'}</h3>
+                            <div class="seller-rating">⭐⭐⭐⭐⭐ (5.0)</div>
+                            <small>Membre depuis ${new Date(seller?.created_at).getFullYear()}</small>
+                        </div>
+                    </div>
+
+                    <div class="product-actions">
+                        <button class="btn-primary btn-large" onclick="purchaseProduct()">
+                            <i class="fas fa-shopping-cart"></i> Acheter maintenant
+                        </button>
+                        <button class="btn-outline btn-large" onclick="addToWishlist()">
+                            <i class="far fa-heart"></i> Favoris
+                        </button>
+                    </div>
+
+                    <div class="commission-breakdown">
+                        <h4>Détail de la répartition</h4>
+                        <div class="commission-item">
+                            <span>Prix du produit:</span>
+                            <span>${currentProduct.price.toLocaleString()} FCFA</span>
+                        </div>
+                        <div class="commission-item">
+                            <span>Commission AfroMarket (10%):</span>
+                            <span>- ${platformFee.toLocaleString()} FCFA</span>
+                        </div>
+                        <div class="commission-item">
+                            <span>Revenu du vendeur (90%):</span>
+                            <span>${sellerEarnings.toLocaleString()} FCFA</span>
+                        </div>
+                    </div>
+
+                    <div class="product-description">
+                        <h3>Description du produit</h3>
+                        <p>${currentProduct.description || 'Aucune description disponible.'}</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function loadRelatedProducts() {
+            if (!currentProduct) return;
+
+            const { data, error } = await supabase
+                .from('products')
+                .select(`
+                    *,
+                    profiles:seller_id (
+                        username,
+                        full_name
+                    )
+                `)
+                .eq('category', currentProduct.category)
+                .neq('id', currentProduct.id)
+                .eq('is_active', true)
+                .limit(4);
+
+            if (error || !data || data.length === 0) return;
+
+            const relatedGrid = document.getElementById('relatedProducts');
+            relatedGrid.innerHTML = data.map(product => `
+                <div class="card product-card">
+                    <div class="product-image">
+                        <img src="${product.image_url}" alt="${product.title}">
+                    </div>
+                    <div class="product-info">
+                        <h3 class="product-title">${product.title}</h3>
+                        <div class="product-price">${product.price.toLocaleString()} FCFA</div>
+                        <div class="product-seller">
+                            <div class="seller-avatar">${getInitials(product.profiles?.full_name)}</div>
+                            <span>${product.profiles?.username || 'Vendeur'}</span>
+                        </div>
+                        <button class="btn-primary" style="width: 100%;" onclick="viewProduct('${product.id}')">Voir le produit</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function getInitials(name) {
+            return name ? name.split(' ').map(n => n[0]).join('').toUpperCase() : 'V';
+        }
+
+        function viewProduct(productId) {
+            window.location.href = `produit.html?id=${productId}`;
+        }
+
+        function purchaseProduct() {
+            if (!currentUser) {
+                alert('Veuillez vous connecter pour acheter ce produit');
+                window.location.href = 'index.html#login';
+                return;
+            }
+            
+            // Simuler le processus d'achat
+            simulatePayment();
+        }
+
+        function simulatePayment() {
+            // Dans une vraie application, intégrer Stripe ou autre processeur de paiement
+            const paymentModal = document.createElement('div');
+            paymentModal.innerHTML = `
+                <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 10000;">
+                    <div style="background: white; padding: 30px; border-radius: 10px; max-width: 500px; width: 90%;">
+                        <h3>Finaliser l'achat</h3>
+                        <p>Vous allez acheter: <strong>${currentProduct.title}</strong></p>
+                        <p>Prix: <strong>${currentProduct.price.toLocaleString()} FCFA</strong></p>
+                        
+                        <div style="margin: 20px 0;">
+                            <label>Méthode de paiement:</label>
+                            <select style="width: 100%; padding: 10px; margin: 10px 0;">
+                                <option>Carte de crédit</option>
+                                <option>Mobile Money</option>
+                                <option>Virement bancaire</option>
+                            </select>
+                        </div>
+                        
+                        <button onclick="completePurchase()" style="background: var(--primary); color: white; border: none; padding: 15px; width: 100%; border-radius: 5px; cursor: pointer;">
+                            Payer ${currentProduct.price.toLocaleString()} FCFA
+                        </button>
+                        <button onclick="this.closest('div').remove()" style="background: transparent; border: 1px solid #ccc; padding: 15px; width: 100%; border-radius: 5px; cursor: pointer; margin-top: 10px;">
+                            Annuler
+                        </button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(paymentModal);
+        }
+
+        async function completePurchase() {
+            // Enregistrer la vente dans la base de données
+            const { error } = await supabase
+                .from('sales')
+                .insert([
+                    {
+                        product_id: currentProduct.id,
+                        buyer_id: currentUser.id,
+                        amount: currentProduct.price,
+                        platform_fee: currentProduct.price * 0.10,
+                        seller_earnings: currentProduct.price * 0.90,
+                        status: 'completed'
+                    }
+                ]);
+
+            if (error) {
+                alert('Erreur lors de l\'achat: ' + error.message);
+                return;
+            }
+
+            alert('Achat réussi! Vous pouvez maintenant télécharger votre produit.');
+            // Rediriger vers la page de téléchargement
+            window.location.href = `telechargement.html?product=${currentProduct.id}`;
+        }
+
+        async function checkAuthState() {
+            const { data: { session } } = await supabase.auth.getSession();
+            currentUser = session?.user || null;
+        }
+
+        document.addEventListener('DOMContentLoaded', initProductPage);
+    </script>
+</body>
+</html>
